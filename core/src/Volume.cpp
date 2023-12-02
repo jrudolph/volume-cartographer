@@ -203,7 +203,12 @@ Reslice Volume::reslice(
 cv::Mat Volume::load_slice_(int index) const
 {
     auto slicePath = getSlicePath(index);
-    return cv::imread(slicePath.string(), -1);
+    cv::Mat mat;
+    try {
+        mat = tio::ReadTIFF(slicePath.string());
+    } catch (std::runtime_error) {
+    }
+    return mat;
 }
 
 cv::Mat Volume::cache_slice_(int index) const
