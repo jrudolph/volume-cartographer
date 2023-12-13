@@ -226,7 +226,12 @@ cv::Mat Volume::load_slice_(int index) const
         std::cout << "Requested to load slice " << index << std::endl;
     }
     auto slicePath = getSlicePath(index);
-    return cv::imread(slicePath.string(), -1);
+    cv::Mat mat;
+    try {
+        mat = tio::ReadTIFF(slicePath.string());
+    } catch (std::runtime_error) {
+    }
+    return mat;
 }
 
 cv::Mat Volume::cache_slice_(int index) const
