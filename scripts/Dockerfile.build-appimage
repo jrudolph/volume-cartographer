@@ -1,0 +1,61 @@
+FROM ghcr.io/educelab/ci-docker:11_v2.dynamic as build-appimage
+
+RUN apt-get update && \
+    apt-get install -y libsdl2-dev libgsl-dev curl file
+
+# Install volcart
+RUN mkdir /volume-cartographer/
+COPY CMakeLists.txt /volume-cartographer/
+COPY app_support /volume-cartographer/app_support
+COPY apps /volume-cartographer/apps
+COPY cmake /volume-cartographer/cmake
+COPY core /volume-cartographer/core
+COPY graph /volume-cartographer/graph
+COPY meshing /volume-cartographer/meshing
+COPY segmentation /volume-cartographer/segmentation
+COPY texturing /volume-cartographer/texturing
+COPY utils /volume-cartographer/utils
+COPY LICENSE /volume-cartographer/
+COPY NOTICE /volume-cartographer/
+
+RUN ls -lash /volume-cartographer/
+
+# RelWithDebInfo would be nice but adds several 100MB to the AppImage (90MB vs 500+MB)
+RUN export CMAKE_PREFIX_PATH="/usr/local/Qt-6.4.2/" \
+    && cmake  \
+      -S /volume-cartographer/ \
+      -B /volume-cartographer/build/ \
+      -DCMAKE_BUILD_TYPE=Release  \
+      -DCMAKE_INSTALL_RPATH=/usr/local/Qt-6.4.2/lib \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DSDL2_DIR=/usr/lib/x86_64-linux-gnu/ \
+      -DVC_BUILD_ACVD=ON
+
+WORKDIR /volume-cartographer/build
+RUN mkdir AppDir
+RUN make -j
+RUN make -j install DESTDIR=AppDir
+
+RUN curl -OL https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20231206-1/linuxdeploy-x86_64.AppImage
+RUN curl -OL https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+RUN chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+
+RUN mkdir -p AppDir/usr/share/applications/
+COPY ./scripts/VC.desktop  AppDir/usr/share/applications/
+
+RUN mkdir -p AppDir/usr/share/icons/hicolor/32x32/apps/
+COPY ./scripts/VC.png  AppDir/usr/share/icons/hicolor/32x32/apps/
+
+COPY ./scripts/start.sh AppDir/usr/bin/start.sh
+
+# unpack linuxdeploy-plugin-qt to avoid the need for FUSE while building
+RUN ./linuxdeploy-plugin-qt-x86_64.AppImage --appimage-extract && \
+    rm linuxdeploy-plugin-qt-x86_64.AppImage && \
+    ln -s squashfs-root/AppRun linuxdeploy-plugin-qt-x86_64.AppImage
+
+ENV QMAKE=/usr/local/Qt-6.4.2/bin/qmake
+
+RUN ./linuxdeploy-x86_64.AppImage --appimage-extract-and-run --appdir AppDir --plugin qt --output appimage
+
+FROM scratch as export-appimage
+COPY --from=build-appimage /volume-cartographer/build/VC-x86_64.AppImage /

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Categories=Utility;
+Type=Application
+Icon=VC
+Exec=start.sh
+Name=VC
+
